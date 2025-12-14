@@ -39,13 +39,3 @@ async def btn_help(message: Message) -> None:
         parse_mode="HTML",
         reply_markup=main_menu_keyboard(),
     )
-
-
-@router.message(F.text == ru.BTN_SETTINGS)
-async def btn_settings(message: Message) -> None:
-    """Handle settings button press."""
-    await message.answer(
-        ru.SETTINGS_TEXT,
-        parse_mode="HTML",
-        reply_markup=main_menu_keyboard(),
-    )

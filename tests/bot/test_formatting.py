@@ -118,7 +118,7 @@ class TestFormatReviewSummary:
         }
         result = format_review_summary(review)
         
-        assert "#1" in result
+        # Summary no longer includes numbering
         assert "Test Movie" in result
         assert "TestUser" in result
         assert "8" in result
@@ -158,7 +158,9 @@ class TestFormatReviewDetail:
         }
         result = format_review_detail(review)
         
-        assert "#42" in result
+        # ID is now shown as "ID: <code>42</code>" instead of "#42"
+        assert "ID:" in result
+        assert "42" in result
         assert "Inception" in result
         assert "2010" in result
         assert "9/10" in result or "9" in result
@@ -183,8 +185,9 @@ class TestFormatReviewDetail:
         }
         # format_review_detail now doesn't include image info (image is sent separately)
         result = format_review_detail(review)
-        # The detail format should still work
-        assert "#1" in result
+        # The detail format should still work, ID shown as "ID: <code>1</code>"
+        assert "ID:" in result
+        assert "1" in result
         assert "Test" in result
 
     def test_review_without_year(self) -> None:

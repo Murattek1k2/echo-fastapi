@@ -12,6 +12,8 @@ from bot.config import get_settings
 from bot.exceptions import ApiBadRequest, ApiNotFound, ApiUnavailable, ApiValidationError
 from bot.i18n import ru
 from bot.keyboards import (
+    ReviewListCallback,
+    ReviewOpenCallback,
     add_image_keyboard,
     confirmation_keyboard,
     edit_field_keyboard,
@@ -73,51 +75,123 @@ async def handle_api_error(message: Message, error: Exception) -> None:
         await message.answer(format_error(ru.ERR_UNEXPECTED), parse_mode="HTML")
 
 
-async def send_review_with_image(message: Message, review: dict[str, Any], client: ReviewsApiClient) -> bool:
-    """Send a review with its image. Returns True if image was sent successfully."""
+def is_review_author(user_id: int | None, review: dict[str, Any]) -> bool:
+    """Check if the given user is the author of the review.
+    
+    Args:
+        user_id: Telegram user ID
+        review: Review data dictionary
+        
+    Returns:
+        True if user is the author, False otherwise
+    """
+    if user_id is None:
+        return False
+    author_telegram_id = review.get("author_telegram_id")
+    return author_telegram_id is not None and author_telegram_id == user_id
+
+
+async def send_review_with_image(
+    message: Message,
+    review: dict[str, Any],
+    client: ReviewsApiClient,
+    is_author: bool = True,
+    show_back_button: bool = False,
+) -> bool:
+    """Send a review with its image. Returns True if image was sent successfully.
+    
+    If the review has an image, sends photo with caption containing the full review text
+    (if it fits in 1024 chars) or a short caption followed by a separate message.
+    
+    Args:
+        message: Telegram message to respond to
+        review: Review data dictionary
+        client: API client for downloading images
+        is_author: Whether current user is the author (controls edit/delete buttons)
+        show_back_button: Whether to show back to list button
+    """
     image_url = review.get("image_url")
     if not image_url:
         return False
     
     settings = get_settings()
-    has_image = bool(review.get("image_url"))
+    review_id = review.get("id", 0)
+    
+    # Get caption - format_photo_caption now returns full text if it fits
+    caption = format_photo_caption(review)
+    full_text = format_review_detail(review)
+    
+    # Check if we need a separate message for full text
+    needs_separate_message = len(full_text) > 1024
+    
+    # Build keyboard
+    keyboard = review_actions_keyboard(
+        review_id,
+        has_image=True,
+        is_author=is_author,
+        show_back_button=show_back_button,
+    )
+    
+    photo_sent = False
     
     if settings.bot_image_mode == "reupload":
         image_data = await client.download_image(image_url)
         if image_data:
             try:
                 photo = BufferedInputFile(image_data, filename="review_image.jpg")
-                await message.answer_photo(
-                    photo=photo,
-                    caption=format_photo_caption(review),
-                    parse_mode="HTML",
-                )
-                await message.answer(
-                    format_review_detail(review),
-                    parse_mode="HTML",
-                    reply_markup=review_actions_keyboard(review["id"], has_image),
-                )
-                return True
+                if needs_separate_message:
+                    # Send photo with short caption
+                    await message.answer_photo(
+                        photo=photo,
+                        caption=caption,
+                        parse_mode="HTML",
+                    )
+                    # Send full text with buttons
+                    await message.answer(
+                        full_text,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                    )
+                else:
+                    # Send photo with full text as caption
+                    await message.answer_photo(
+                        photo=photo,
+                        caption=caption,
+                        parse_mode="HTML",
+                        reply_markup=keyboard,
+                    )
+                photo_sent = True
             except Exception as e:
                 logger.warning(f"Failed to send re-uploaded image: {e}")
     else:
         full_url = client.get_absolute_image_url(image_url)
         try:
-            await message.answer_photo(
-                photo=full_url,
-                caption=format_photo_caption(review),
-                parse_mode="HTML",
-            )
-            await message.answer(
-                format_review_detail(review),
-                parse_mode="HTML",
-                reply_markup=review_actions_keyboard(review["id"], has_image),
-            )
-            return True
+            if needs_separate_message:
+                # Send photo with short caption
+                await message.answer_photo(
+                    photo=full_url,
+                    caption=caption,
+                    parse_mode="HTML",
+                )
+                # Send full text with buttons
+                await message.answer(
+                    full_text,
+                    parse_mode="HTML",
+                    reply_markup=keyboard,
+                )
+            else:
+                # Send photo with full text as caption
+                await message.answer_photo(
+                    photo=full_url,
+                    caption=caption,
+                    parse_mode="HTML",
+                    reply_markup=keyboard,
+                )
+            photo_sent = True
         except Exception as e:
             logger.warning(f"Failed to send image by URL: {e}")
     
-    return False
+    return photo_sent
 
 
 # ============== BUTTON HANDLERS FOR MAIN MENU ==============
@@ -340,6 +414,7 @@ async def create_review_from_state(
     await state.clear()
     
     author_name = get_author_name(user)
+    author_telegram_id = user.id if hasattr(user, 'id') else None
     
     try:
         client = get_api_client()
@@ -351,6 +426,7 @@ async def create_review_from_state(
             text=data["text"],
             media_year=data.get("media_year"),
             contains_spoilers=data.get("contains_spoilers", False),
+            author_telegram_id=author_telegram_id,
         )
         
         if photo_file_id and hasattr(message_or_callback, "bot"):
@@ -416,7 +492,7 @@ async def show_reviews_feed(
             lines.append(format_review_summary(review))
             lines.append("")
         
-        keyboard = pagination_keyboard(offset, limit, len(reviews), filter_param)
+        keyboard = pagination_keyboard(offset, limit, len(reviews), filter_param, reviews=reviews)
         await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=keyboard)
     except Exception as e:
         await handle_api_error(message, e)
@@ -483,7 +559,7 @@ async def handle_pagination(callback: CallbackQuery) -> None:
             lines.append(format_review_summary(review))
             lines.append("")
         
-        keyboard = pagination_keyboard(offset, limit, len(reviews), filter_param)
+        keyboard = pagination_keyboard(offset, limit, len(reviews), filter_param, reviews=reviews)
         await callback.message.edit_text(
             "\n".join(lines),
             parse_mode="HTML",
@@ -534,7 +610,7 @@ async def apply_type_filter(callback: CallbackQuery) -> None:
             lines.append(format_review_summary(review))
             lines.append("")
         
-        keyboard = pagination_keyboard(0, 5, len(reviews), filter_param)
+        keyboard = pagination_keyboard(0, 5, len(reviews), filter_param, reviews=reviews)
         await callback.message.edit_text(
             "\n".join(lines),
             parse_mode="HTML",
@@ -569,7 +645,7 @@ async def apply_rating_filter(callback: CallbackQuery) -> None:
             lines.append(format_review_summary(review))
             lines.append("")
         
-        keyboard = pagination_keyboard(0, 5, len(reviews), filter_param)
+        keyboard = pagination_keyboard(0, 5, len(reviews), filter_param, reviews=reviews)
         await callback.message.edit_text(
             "\n".join(lines),
             parse_mode="HTML",
@@ -604,7 +680,7 @@ async def apply_my_filter(callback: CallbackQuery) -> None:
             lines.append(format_review_summary(review))
             lines.append("")
         
-        keyboard = pagination_keyboard(0, 5, len(reviews), filter_param)
+        keyboard = pagination_keyboard(0, 5, len(reviews), filter_param, reviews=reviews)
         await callback.message.edit_text(
             "\n".join(lines),
             parse_mode="HTML",
@@ -636,7 +712,7 @@ async def reset_filter(callback: CallbackQuery) -> None:
             lines.append(format_review_summary(review))
             lines.append("")
         
-        keyboard = pagination_keyboard(0, 5, len(reviews))
+        keyboard = pagination_keyboard(0, 5, len(reviews), reviews=reviews)
         await callback.message.edit_text(
             "\n".join(lines),
             parse_mode="HTML",
@@ -668,7 +744,7 @@ async def cancel_filter(callback: CallbackQuery) -> None:
             lines.append(format_review_summary(review))
             lines.append("")
         
-        keyboard = pagination_keyboard(0, 5, len(reviews))
+        keyboard = pagination_keyboard(0, 5, len(reviews), reviews=reviews)
         await callback.message.edit_text(
             "\n".join(lines),
             parse_mode="HTML",
@@ -709,7 +785,7 @@ async def process_find_method(callback: CallbackQuery, state: FSMContext) -> Non
 @router.message(ReviewFindStates.enter_id)
 async def find_by_id(message: Message, state: FSMContext) -> None:
     """Find review by ID."""
-    if not message.text:
+    if not message.text or not message.from_user:
         await message.answer(ru.PROMPT_FIND_INVALID_ID)
         return
     
@@ -720,7 +796,7 @@ async def find_by_id(message: Message, state: FSMContext) -> None:
         return
     
     await state.clear()
-    await show_single_review(message, review_id)
+    await show_single_review(message, review_id, user_id=message.from_user.id)
 
 
 @router.message(ReviewFindStates.enter_title)
@@ -742,37 +818,146 @@ async def find_by_title(message: Message, state: FSMContext) -> None:
             await message.answer(ru.PROMPT_NO_REVIEWS, parse_mode="HTML")
             return
         
+        # Limit to first 10 matches
+        matching = matching[:10]
+        
         lines = [ru.PROMPT_REVIEWS_HEADER]
-        for review in matching[:10]:
+        for review in matching:
             lines.append(format_review_summary(review))
             lines.append("")
         
-        await message.answer("\n".join(lines), parse_mode="HTML")
+        keyboard = pagination_keyboard(0, len(matching), len(matching), reviews=matching)
+        await message.answer("\n".join(lines), parse_mode="HTML", reply_markup=keyboard)
     except Exception as e:
         await handle_api_error(message, e)
 
 
 # ============== VIEW SINGLE REVIEW ==============
 
-async def show_single_review(message: Message, review_id: int) -> None:
-    """Show a single review with image handling."""
+async def show_single_review(
+    message: Message,
+    review_id: int,
+    user_id: int | None = None,
+    show_back_button: bool = False,
+) -> None:
+    """Show a single review with image handling.
+    
+    Args:
+        message: Message to respond to
+        review_id: Review ID to display
+        user_id: Current user's Telegram ID (for ownership check)
+        show_back_button: Whether to show back to list button
+    """
     try:
         client = get_api_client()
         review = await client.get_review(review_id)
         
         has_image = bool(review.get("image_url"))
+        is_author = is_review_author(user_id, review)
         
         if has_image:
-            if await send_review_with_image(message, review, client):
+            if await send_review_with_image(message, review, client, is_author=is_author, show_back_button=show_back_button):
                 return
         
         await message.answer(
             format_review_detail(review),
             parse_mode="HTML",
-            reply_markup=review_actions_keyboard(review_id, has_image),
+            reply_markup=review_actions_keyboard(
+                review_id,
+                has_image,
+                is_author=is_author,
+                show_back_button=show_back_button,
+            ),
         )
     except Exception as e:
         await handle_api_error(message, e)
+
+
+@router.callback_query(ReviewOpenCallback.filter())
+async def handle_review_open(callback: CallbackQuery, callback_data: ReviewOpenCallback) -> None:
+    """Handle clicking on a review in the list to open it."""
+    if not callback.message or not callback.from_user:
+        return
+    
+    user_id = callback.from_user.id
+    review_id = callback_data.id
+    
+    try:
+        client = get_api_client()
+        review = await client.get_review(review_id)
+        
+        has_image = bool(review.get("image_url"))
+        is_author = is_review_author(user_id, review)
+        
+        if has_image:
+            # For callbacks we need to send a new message since we can't replace text with photo
+            if await send_review_with_image(callback.message, review, client, is_author=is_author, show_back_button=True):
+                await callback.answer()
+                return
+        
+        # Edit the current message with review details
+        await callback.message.edit_text(
+            format_review_detail(review),
+            parse_mode="HTML",
+            reply_markup=review_actions_keyboard(
+                review_id,
+                has_image,
+                is_author=is_author,
+                show_back_button=True,
+            ),
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.exception("Error opening review")
+        await callback.answer(ru.ERR_UNEXPECTED)
+
+
+@router.callback_query(ReviewListCallback.filter())
+async def handle_back_to_list(callback: CallbackQuery, callback_data: ReviewListCallback) -> None:
+    """Handle clicking back to list button."""
+    if not callback.message:
+        return
+    
+    offset = callback_data.offset
+    filter_param = callback_data.filter_param
+    
+    filters: dict[str, Any] = {}
+    if filter_param:
+        try:
+            key, value = filter_param.split("=", 1)
+            if key == "min_rating":
+                filters["min_rating"] = int(value)
+            elif key == "media_type":
+                filters["media_type"] = value
+            elif key == "author_name":
+                filters["author_name"] = value
+        except ValueError:
+            pass
+    
+    try:
+        client = get_api_client()
+        reviews = await client.list_reviews(limit=5, offset=offset, **filters)
+        
+        if not reviews:
+            await callback.message.edit_text(ru.PROMPT_NO_REVIEWS, parse_mode="HTML")
+            await callback.answer()
+            return
+        
+        lines = [ru.PROMPT_REVIEWS_HEADER]
+        for review in reviews:
+            lines.append(format_review_summary(review))
+            lines.append("")
+        
+        keyboard = pagination_keyboard(offset, 5, len(reviews), filter_param, reviews=reviews)
+        await callback.message.edit_text(
+            "\n".join(lines),
+            parse_mode="HTML",
+            reply_markup=keyboard,
+        )
+        await callback.answer()
+    except Exception as e:
+        logger.exception("Error returning to list")
+        await callback.answer(ru.ERR_UNEXPECTED)
 
 
 @router.message(Command("review"))
@@ -799,7 +984,7 @@ async def cmd_review(message: Message, command: CommandObject) -> None:
         await message.answer(format_error(ru.ERR_INVALID_REVIEW_ID), parse_mode="HTML")
         return
     
-    await show_single_review(message, review_id)
+    await show_single_review(message, review_id, user_id=message.from_user.id)
 
 
 # ============== REVIEW ACTIONS ==============
@@ -807,12 +992,25 @@ async def cmd_review(message: Message, command: CommandObject) -> None:
 @router.callback_query(F.data.startswith("action:"))
 async def handle_review_action(callback: CallbackQuery, state: FSMContext) -> None:
     """Handle review action button clicks."""
-    if not callback.data or not callback.message:
+    if not callback.data or not callback.message or not callback.from_user:
         return
     
     parts = callback.data.split(":")
     review_id = int(parts[1])
     action = parts[2]
+    
+    # Check ownership before allowing edit/delete/photo actions
+    if action in ("edit", "delete", "photo"):
+        try:
+            client = get_api_client()
+            review = await client.get_review(review_id)
+            if not is_review_author(callback.from_user.id, review):
+                await callback.answer(ru.ERR_NOT_YOUR_REVIEW, show_alert=True)
+                return
+        except Exception as e:
+            logger.exception("Failed to check review ownership")
+            await callback.answer(ru.ERR_UNEXPECTED)
+            return
     
     if action == "edit":
         await start_review_edit(callback, state, review_id)
@@ -986,7 +1184,12 @@ async def cmd_review_edit(message: Message, command: CommandObject, state: FSMCo
     
     try:
         client = get_api_client()
-        await client.get_review(review_id)
+        review = await client.get_review(review_id)
+        
+        # Check ownership
+        if not is_review_author(message.from_user.id, review):
+            await message.answer(ru.ERR_NOT_YOUR_REVIEW, parse_mode="HTML")
+            return
     except Exception as e:
         await handle_api_error(message, e)
         return
@@ -1242,6 +1445,11 @@ async def cmd_review_delete(message: Message, command: CommandObject, state: FSM
     try:
         client = get_api_client()
         review = await client.get_review(review_id)
+        
+        # Check ownership
+        if not is_review_author(message.from_user.id, review):
+            await message.answer(ru.ERR_NOT_YOUR_REVIEW, parse_mode="HTML")
+            return
     except Exception as e:
         await handle_api_error(message, e)
         return

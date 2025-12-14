@@ -4,7 +4,6 @@
 BTN_ADD_REVIEW = "➕ Добавить отзыв"
 BTN_FEED = "📚 Лента отзывов"
 BTN_FIND = "🔎 Найти отзыв"
-BTN_SETTINGS = "⚙️ Настройки"
 BTN_HELP = "❓ Помощь"
 
 # ============== MEDIA TYPE BUTTONS ==============
@@ -149,7 +148,6 @@ HELP_TEXT = """
 • ➕ Добавить отзыв — создать новый отзыв
 • 📚 Лента отзывов — просмотреть последние отзывы
 • 🔎 Найти отзыв — поиск по ID или названию
-• ⚙️ Настройки — настройки бота
 • ❓ Помощь — эта справка
 
 <b>Команды (для опытных пользователей):</b>
@@ -195,6 +193,13 @@ FMT_MEDIA_TYPE_SHORT = {
     "play": "Спектакль",
 }
 
+FMT_MEDIA_TYPE_EMOJI = {
+    "movie": "🎬",
+    "tv": "📺",
+    "book": "📖",
+    "play": "🎭",
+}
+
 FMT_RATING = "{stars} {rating}/10"  # e.g. "⭐⭐⭐⭐⭐ 5/10"
 FMT_SPOILERS_YES = "⚠️ Есть спойлеры"
 FMT_SPOILERS_NO = "✅ Без спойлеров"
@@ -206,16 +211,26 @@ FMT_IMAGE_LINK = "🔗 <a href=\"{}\">Ссылка на изображение</
 
 # Short caption for photo (max 1024 chars)
 FMT_PHOTO_CAPTION = "<b>{title}</b>\n{media_type} {year}\n{rating}"
-# Full review detail
-FMT_REVIEW_DETAIL = """<b>Отзыв #{id}</b>
-
-{media_type}: <b>{title}</b>{year}
+# Full review detail (no numbering, use ID: X format)
+FMT_REVIEW_DETAIL = """{media_type}: <b>{title}</b>{year}
 {rating}
 {spoilers}
 
 <i>{text}</i>
 
 {author}
-{created}{updated}"""
+{created}{updated}
 
-FMT_REVIEW_SUMMARY = "<b>#{id}</b> {media_type}\n<b>{title}</b>\n{rating} от {author}"
+ID: <code>{id}</code>"""
+
+# Short summary for list view (no numbering)
+FMT_REVIEW_SUMMARY = "{media_type}\n<b>{title}</b>\n{rating} от {author}"
+
+# Button text format for review in list
+FMT_REVIEW_BUTTON = "{emoji} {rating}/10 · {title}"
+
+# Error messages for ownership
+ERR_NOT_YOUR_REVIEW = "❌ Вы можете редактировать и удалять только свои собственные отзывы."
+
+# Back to list button
+BTN_BACK_TO_LIST = "⬅️ Назад к списку"

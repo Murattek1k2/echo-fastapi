@@ -1,9 +1,25 @@
 """Inline and reply keyboards for bot interactions."""
 
+from typing import Any
+
+from aiogram.filters.callback_data import CallbackData
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, ReplyKeyboardMarkup, KeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder, ReplyKeyboardBuilder
 
 from bot.i18n import ru
+
+
+# ============== CALLBACK DATA FACTORIES ==============
+
+class ReviewOpenCallback(CallbackData, prefix="open_review"):
+    """Callback data for opening a review."""
+    id: int
+
+
+class ReviewListCallback(CallbackData, prefix="review_list"):
+    """Callback data for returning to review list."""
+    offset: int = 0
+    filter_param: str = ""
 
 
 def main_menu_keyboard() -> ReplyKeyboardMarkup:
@@ -14,10 +30,7 @@ def main_menu_keyboard() -> ReplyKeyboardMarkup:
         KeyboardButton(text=ru.BTN_FEED),
         KeyboardButton(text=ru.BTN_FIND),
     )
-    builder.row(
-        KeyboardButton(text=ru.BTN_SETTINGS),
-        KeyboardButton(text=ru.BTN_HELP),
-    )
+    builder.row(KeyboardButton(text=ru.BTN_HELP))
     return builder.as_markup(resize_keyboard=True, is_persistent=True)
 
 
@@ -77,6 +90,7 @@ def pagination_keyboard(
     limit: int,
     total_shown: int,
     filter_param: str = "",
+    reviews: list[dict[str, Any]] | None = None,
 ) -> InlineKeyboardMarkup:
     """Create pagination keyboard for review listing.
     
@@ -85,8 +99,24 @@ def pagination_keyboard(
         limit: Items per page
         total_shown: Number of items shown on current page
         filter_param: Optional filter parameter string (e.g., "media_type=movie")
+        reviews: Optional list of reviews to create clickable buttons for
     """
+    from bot.utils.formatting import format_review_button_text
+    
     builder = InlineKeyboardBuilder()
+    
+    # Add buttons for each review (one per row)
+    if reviews:
+        for review in reviews:
+            review_id = review.get("id")
+            if review_id:
+                button_text = format_review_button_text(review)
+                builder.row(
+                    InlineKeyboardButton(
+                        text=button_text,
+                        callback_data=ReviewOpenCallback(id=review_id).pack(),
+                    )
+                )
     
     # Navigation row
     nav_buttons = []
@@ -154,16 +184,45 @@ def find_method_keyboard() -> InlineKeyboardMarkup:
     return builder.as_markup()
 
 
-def review_actions_keyboard(review_id: int, has_image: bool = False) -> InlineKeyboardMarkup:
-    """Create keyboard with review action buttons."""
+def review_actions_keyboard(
+    review_id: int,
+    has_image: bool = False,
+    is_author: bool = True,
+    show_back_button: bool = False,
+    back_offset: int = 0,
+    back_filter_param: str = "",
+) -> InlineKeyboardMarkup:
+    """Create keyboard with review action buttons.
+    
+    Args:
+        review_id: The review ID
+        has_image: Whether the review has an image
+        is_author: Whether the current user is the author (controls edit/delete visibility)
+        show_back_button: Whether to show "back to list" button
+        back_offset: Offset for back to list navigation
+        back_filter_param: Filter param for back to list navigation
+    """
     builder = InlineKeyboardBuilder()
-    builder.row(
-        InlineKeyboardButton(text=ru.BTN_EDIT, callback_data=f"action:{review_id}:edit"),
-        InlineKeyboardButton(text=ru.BTN_DELETE, callback_data=f"action:{review_id}:delete"),
-    )
-    builder.row(
-        InlineKeyboardButton(text=ru.BTN_PHOTO, callback_data=f"action:{review_id}:photo"),
-    )
+    
+    # Only show edit/delete buttons if user is the author
+    if is_author:
+        builder.row(
+            InlineKeyboardButton(text=ru.BTN_EDIT, callback_data=f"action:{review_id}:edit"),
+            InlineKeyboardButton(text=ru.BTN_DELETE, callback_data=f"action:{review_id}:delete"),
+        )
+        builder.row(
+            InlineKeyboardButton(text=ru.BTN_PHOTO, callback_data=f"action:{review_id}:photo"),
+        )
+    
+    # Add back to list button if requested
+    if show_back_button:
+        builder.row(
+            InlineKeyboardButton(
+                text=ru.BTN_BACK_TO_LIST,
+                callback_data=ReviewListCallback(offset=back_offset, filter_param=back_filter_param).pack(),
+            )
+        )
+    
     return builder.as_markup()
 
 
