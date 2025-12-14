@@ -393,3 +393,30 @@ def test_list_reviews_with_media_title_filter(client: TestClient) -> None:
     reviews = response.json()
     assert len(reviews) == 2
     assert all("Matrix" in r["media_title"] for r in reviews)
+
+
+def test_create_review_with_large_telegram_id(client: TestClient) -> None:
+    """Test creating a review with a large Telegram user ID (exceeds 32-bit integer)."""
+    # Telegram IDs can exceed the 32-bit integer max (2,147,483,647)
+    # This tests the BigInteger column type for author_telegram_id
+    large_telegram_id = 7712027002  # This is from the original bug report
+    
+    create_response = client.post(
+        "/reviews/",
+        json={
+            "author_name": "Zulfat_Dev",
+            "author_telegram_id": large_telegram_id,
+            "media_type": "movie",
+            "media_title": "Таксист",
+            "media_year": 2021,
+            "rating": 9,
+            "text": "Текст отзыва",
+            "contains_spoilers": False,
+        },
+    )
+    assert create_response.status_code == 201
+    data = create_response.json()
+    assert data["author_name"] == "Zulfat_Dev"
+    assert data["author_telegram_id"] == large_telegram_id
+    assert data["media_title"] == "Таксист"
+    assert data["rating"] == 9
