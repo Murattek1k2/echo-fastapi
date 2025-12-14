@@ -7,6 +7,7 @@ from aiogram.types import Message
 
 from bot.api_client import ReviewsApiClient
 from bot.exceptions import ApiNotFound, ApiUnavailable
+from bot.i18n import ru
 from bot.logging_config import get_logger
 from bot.rate_limiter import rate_limiter
 from bot.utils.formatting import format_error, format_review_updated
@@ -26,7 +27,7 @@ def get_api_client() -> ReviewsApiClient:
 def extract_review_id_from_message(text: str | None) -> int | None:
     """Extract review ID from a message text.
     
-    Looks for patterns like "Review #123" or "ID: 123".
+    Looks for patterns like "Review #123", "Отзыв #123" or "ID: 123".
     
     Args:
         text: Message text to search
@@ -37,8 +38,8 @@ def extract_review_id_from_message(text: str | None) -> int | None:
     if not text:
         return None
     
-    # Look for "Review #123" pattern
-    match = re.search(r"Review #(\d+)", text)
+    # Look for "Review #123" or "Отзыв #123" pattern
+    match = re.search(r"(?:Review|Отзыв) #(\d+)", text)
     if match:
         return int(match.group(1))
     
@@ -68,7 +69,7 @@ async def handle_photo_reply(message: Message) -> None:
     if not rate_limiter.is_allowed(message.from_user.id):
         retry_after = int(rate_limiter.get_retry_after(message.from_user.id))
         await message.answer(
-            format_error(f"Too many requests. Please wait {retry_after} seconds."),
+            format_error(ru.ERR_RATE_LIMIT.format(retry_after)),
             parse_mode="HTML",
         )
         return
@@ -78,11 +79,7 @@ async def handle_photo_reply(message: Message) -> None:
     review_id = extract_review_id_from_message(reply_text)
     
     if review_id is None:
-        await message.answer(
-            "💡 To upload an image, reply to a message that contains a review ID.\n\n"
-            "For example, reply with a photo to a message from <code>/review 1</code>",
-            parse_mode="HTML",
-        )
+        await message.answer(ru.PROMPT_PHOTO_REPLY_HINT, parse_mode="HTML")
         return
     
     # Get the largest photo
@@ -97,12 +94,12 @@ async def handle_photo_reply(message: Message) -> None:
         bot: Bot = message.bot  # type: ignore
         file = await bot.get_file(photo.file_id)
         if not file.file_path:
-            await message.answer(format_error("Failed to get file from Telegram."), parse_mode="HTML")
+            await message.answer(format_error(ru.ERR_FAILED_TO_DOWNLOAD_IMAGE), parse_mode="HTML")
             return
         
         file_content = await bot.download_file(file.file_path)
         if not file_content:
-            await message.answer(format_error("Failed to download file."), parse_mode="HTML")
+            await message.answer(format_error(ru.ERR_FAILED_TO_DOWNLOAD_IMAGE), parse_mode="HTML")
             return
         
         image_data = file_content.read()
@@ -120,18 +117,14 @@ async def handle_photo_reply(message: Message) -> None:
         )
         
         await message.answer(
-            f"🖼️ <b>Image uploaded successfully!</b>\n\n"
-            f"{format_review_updated(review)}",
+            f"{ru.MSG_IMAGE_UPLOADED}\n\n{format_review_updated(review)}",
             parse_mode="HTML",
         )
         
     except ApiNotFound:
-        await message.answer(format_error(f"Review #{review_id} not found."), parse_mode="HTML")
+        await message.answer(format_error(ru.ERR_REVIEW_NOT_FOUND_FMT.format(review_id)), parse_mode="HTML")
     except ApiUnavailable:
-        await message.answer(
-            format_error("The API is temporarily unavailable. Please try again later."),
-            parse_mode="HTML",
-        )
+        await message.answer(format_error(ru.ERR_API_UNAVAILABLE), parse_mode="HTML")
     except Exception as e:
         logger.exception("Failed to upload image")
-        await message.answer(format_error(f"Failed to upload image: {e}"), parse_mode="HTML")
+        await message.answer(format_error(ru.ERR_FAILED_TO_UPLOAD.format(e)), parse_mode="HTML")
