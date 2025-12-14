@@ -17,8 +17,10 @@ def format_media_type(media_type: str) -> str:
         "book": "📖",
         "play": "🎭",
     }
+    # Special case for TV to keep it uppercase
+    display_name = "TV" if media_type.lower() == "tv" else media_type.title()
     emoji = emoji_map.get(media_type, "📝")
-    return f"{emoji} {media_type.title()}"
+    return f"{emoji} {display_name}"
 
 
 def format_rating(rating: int) -> str:

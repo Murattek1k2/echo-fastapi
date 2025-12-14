@@ -187,6 +187,26 @@ class TestReviewsApiClient:
             assert result["rating"] == 9
 
     @pytest.mark.asyncio
+    async def test_update_review_clear_fields(self, client: ReviewsApiClient) -> None:
+        """Test clearing a field using _clear_fields."""
+        mock_response = httpx.Response(
+            200,
+            json={
+                "id": 1,
+                "media_year": None,
+            },
+        )
+        
+        with patch.object(httpx.AsyncClient, "request", new_callable=AsyncMock) as mock_request:
+            mock_request.return_value = mock_response
+            
+            result = await client.update_review(1, _clear_fields=["media_year"])
+            
+            # Verify that media_year was sent as None
+            call_kwargs = mock_request.call_args.kwargs
+            assert call_kwargs["json"]["media_year"] is None
+
+    @pytest.mark.asyncio
     async def test_delete_review_success(self, client: ReviewsApiClient) -> None:
         """Test successful review deletion."""
         mock_response = httpx.Response(204)

@@ -585,8 +585,8 @@ async def edit_media_year_skip(callback: CallbackQuery, state: FSMContext) -> No
     
     try:
         client = get_api_client()
-        # Set to None to remove the year
-        review = await client.update_review(review_id, media_year=None)
+        # Use _clear_fields to explicitly set media_year to None
+        review = await client.update_review(review_id, _clear_fields=["media_year"])
         await state.clear()
         await callback.message.edit_text(format_review_updated(review), parse_mode="HTML")
     except Exception as e:

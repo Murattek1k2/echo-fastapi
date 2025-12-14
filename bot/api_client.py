@@ -196,12 +196,24 @@ class ReviewsApiClient:
         Args:
             review_id: Review ID
             **fields: Fields to update (rating, text, contains_spoilers, etc.)
+                      Use a special _clear_fields list to explicitly clear fields.
 
         Returns:
             Updated review data
         """
-        # Filter out None values
-        payload = {k: v for k, v in fields.items() if v is not None}
+        # Build payload, keeping None values only if they're explicitly meant to clear a field
+        # The API's PATCH endpoint uses exclude_unset=True, so we need to send None explicitly
+        payload = {}
+        clear_fields = fields.pop("_clear_fields", [])
+        
+        for k, v in fields.items():
+            if v is not None:
+                payload[k] = v
+        
+        # Add fields to clear as None
+        for field in clear_fields:
+            payload[field] = None
+        
         response = await self._make_request("PATCH", f"/reviews/{review_id}", json=payload)
         return response.json()
 

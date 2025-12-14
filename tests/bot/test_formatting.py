@@ -46,7 +46,7 @@ class TestFormatMediaType:
         """Test TV gets correct emoji."""
         result = format_media_type("tv")
         assert "📺" in result
-        assert "Tv" in result
+        assert "TV" in result
 
     def test_book_emoji(self) -> None:
         """Test book gets correct emoji."""
