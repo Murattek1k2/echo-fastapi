@@ -16,9 +16,11 @@ class ReviewCreate(BaseModel):
 
 
 class ReviewUpdate(BaseModel):
-    """Schema for updating a review (partial update)."""
+    """Schema for updating a review (partial update).
+    
+    Note: author_name is not updatable to avoid unique constraint violations.
+    """
 
-    author_name: str | None = None
     rating: int | None = Field(default=None, ge=1, le=10)
     text: str | None = None
     contains_spoilers: bool | None = None
