@@ -22,7 +22,7 @@ def _migrate_author_telegram_id_to_bigint(engine: Engine) -> None:
     inspector = inspect(engine)
 
     # Check if the reviews table exists
-    if "reviews" not in inspector.get_table_names():
+    if not inspector.has_table("reviews"):
         return  # Table doesn't exist yet, create_all will create it correctly
 
     # Get column info for the reviews table
@@ -33,7 +33,7 @@ def _migrate_author_telegram_id_to_bigint(engine: Engine) -> None:
             col_type = str(col["type"]).upper()
             # PostgreSQL uses INTEGER, SQLite uses INTEGER
             # We need to alter to BIGINT only for PostgreSQL
-            if "BIGINT" not in col_type and "postgresql" in engine.dialect.name:
+            if "BIGINT" not in col_type and engine.dialect.name == "postgresql":
                 with engine.begin() as conn:
                     conn.execute(
                         text(
