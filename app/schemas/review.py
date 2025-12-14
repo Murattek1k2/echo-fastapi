@@ -11,6 +11,7 @@ class ReviewCreate(BaseModel):
     """Schema for creating a review."""
 
     author_name: str
+    author_telegram_id: int | None = None
     media_type: MediaType
     media_title: str
     media_year: int | None = None
@@ -50,6 +51,7 @@ class ReviewRead(BaseModel):
 
     id: int
     author_name: str
+    author_telegram_id: int | None = None
     media_type: MediaType
     media_title: str
     media_year: int | None

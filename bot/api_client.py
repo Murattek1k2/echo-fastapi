@@ -114,6 +114,7 @@ class ReviewsApiClient:
         text: str,
         media_year: int | None = None,
         contains_spoilers: bool = False,
+        author_telegram_id: int | None = None,
     ) -> dict[str, Any]:
         """Create a new review.
 
@@ -125,6 +126,7 @@ class ReviewsApiClient:
             text: Review text
             media_year: Optional media year
             contains_spoilers: Whether the review contains spoilers
+            author_telegram_id: Optional Telegram user ID of the author
 
         Returns:
             Created review data
@@ -139,6 +141,8 @@ class ReviewsApiClient:
         }
         if media_year is not None:
             payload["media_year"] = media_year
+        if author_telegram_id is not None:
+            payload["author_telegram_id"] = author_telegram_id
 
         response = await self._make_request("POST", "/reviews/", json=payload)
         return response.json()

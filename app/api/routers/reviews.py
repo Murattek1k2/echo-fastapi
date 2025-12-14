@@ -38,6 +38,7 @@ def create_review(data: ReviewCreate, db: DbSession) -> Review:
     """Create a new review."""
     review = Review(
         author_name=data.author_name,
+        author_telegram_id=data.author_telegram_id,
         media_type=data.media_type,
         media_title=data.media_title,
         media_year=data.media_year,

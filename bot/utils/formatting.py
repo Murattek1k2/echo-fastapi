@@ -45,14 +45,12 @@ def format_review_summary(review: dict[str, Any]) -> str:
     Returns:
         Formatted HTML string
     """
-    review_id = review.get("id", "?")
     title = escape_html(review.get("media_title", "Unknown"))
     media_type = review.get("media_type", "unknown")
     rating = review.get("rating", 0)
     author = escape_html(review.get("author_name", "Аноним"))
     
     return ru.FMT_REVIEW_SUMMARY.format(
-        id=review_id,
         media_type=format_media_type(media_type),
         title=title,
         rating=format_rating(rating),
@@ -115,6 +113,13 @@ def format_photo_caption(review: dict[str, Any]) -> str:
     Returns:
         Formatted HTML string suitable for photo caption
     """
+    # Try to include full review detail
+    full_text = format_review_detail(review)
+    
+    if len(full_text) <= 1024:
+        return full_text
+    
+    # Fall back to short caption if full text is too long
     title = escape_html(review.get("media_title", ""))
     media_type = review.get("media_type", "")
     year = review.get("media_year")
@@ -135,6 +140,29 @@ def format_photo_caption(review: dict[str, Any]) -> str:
         caption = caption[:1020] + "..."
     
     return caption
+
+
+def format_review_button_text(review: dict[str, Any]) -> str:
+    """Format short text for inline button in review list.
+    
+    Args:
+        review: Review data dictionary
+        
+    Returns:
+        Short string for button text
+    """
+    title = review.get("media_title", "Unknown")
+    media_type = review.get("media_type", "unknown")
+    rating = review.get("rating", 0)
+    
+    emoji = ru.FMT_MEDIA_TYPE_EMOJI.get(media_type, "📝")
+    
+    # Truncate title if too long for button
+    max_title_len = 30
+    if len(title) > max_title_len:
+        title = title[:max_title_len - 1] + "…"
+    
+    return ru.FMT_REVIEW_BUTTON.format(emoji=emoji, rating=rating, title=title)
 
 
 def format_review_created(review: dict[str, Any]) -> str:
