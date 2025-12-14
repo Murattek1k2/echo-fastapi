@@ -1,23 +1,21 @@
 # Multi-stage Dockerfile for the FastAPI Reviews API
-# Stage 1: Build stage - install dependencies
+# Stage 1: Build stage - install dependencies using uv (much faster than poetry)
 FROM python:3.12-slim AS builder
 
 # Set working directory
 WORKDIR /app
 
-# Install Poetry
-ENV POETRY_VERSION=2.2.1 \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_NO_INTERACTION=1
-
-RUN pip install --no-cache-dir poetry==${POETRY_VERSION}
+# Install uv - a fast Python package installer
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Copy only dependency files first (for better layer caching)
-COPY pyproject.toml poetry.lock ./
+# Note: poetry.lock is kept for compatibility with local dev workflow
+COPY pyproject.toml ./
 
-# Configure poetry to not create virtual environment and install dependencies
-RUN poetry config virtualenvs.create false \
-    && poetry install --only main --no-root --no-directory
+# Use uv to install dependencies (much faster than poetry)
+# First compile requirements, then install them
+RUN uv pip compile pyproject.toml --no-header -q -o requirements.txt && \
+    uv pip install --system --no-cache -r requirements.txt
 
 # Stage 2: Runtime stage
 FROM python:3.12-slim AS runtime
