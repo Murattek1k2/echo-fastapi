@@ -71,3 +71,89 @@ poetry run pytest
 - Swagger UI: `http://localhost:8000/docs`
 - ReDoc: `http://localhost:8000/redoc`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
+
+## Docker Deployment
+
+The application can be deployed using Docker with PostgreSQL as the database.
+
+### Prerequisites
+
+- Docker and Docker Compose installed
+
+### Quick Start
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env
+   ```
+
+2. Edit `.env` and set your Telegram bot token:
+   ```
+   BOT_TOKEN=your_telegram_bot_token_here
+   ```
+
+3. Build and run all services:
+   ```bash
+   docker compose up --build
+   ```
+
+This starts three services:
+- **db**: PostgreSQL database (port 5432)
+- **api**: FastAPI Reviews API (port 8000)
+- **bot**: Telegram bot
+
+The API will be available at `http://localhost:8000/docs`.
+
+### Services Overview
+
+| Service | Description | Port |
+|---------|-------------|------|
+| db | PostgreSQL 16 database | 5432 |
+| api | FastAPI Reviews API | 8000 |
+| bot | Telegram Bot | - |
+
+### Data Persistence
+
+- **Database**: PostgreSQL data is stored in `./.data/postgres/`
+- **Uploads**: Review images are stored in `./uploads/`
+
+### Environment Variables
+
+Key environment variables for Docker:
+
+| Variable | Service | Description |
+|----------|---------|-------------|
+| `DATABASE_URL` | api | PostgreSQL connection string |
+| `API_ENV` | api | Environment (development/production) |
+| `BOT_TOKEN` | bot | Telegram Bot API token |
+| `API_BASE_URL` | bot | API URL (http://api:8000 in Docker) |
+
+### Running in Detached Mode
+
+```bash
+docker compose up -d --build
+```
+
+### Viewing Logs
+
+```bash
+docker compose logs -f
+```
+
+### Stopping Services
+
+```bash
+docker compose down
+```
+
+### Rebuilding After Changes
+
+```bash
+docker compose up --build
+```
+
+### Production Notes
+
+- Change the default PostgreSQL password in `docker-compose.yml`
+- Set proper `SECRET_KEY` for production
+- Consider using environment variables or secrets management for sensitive data

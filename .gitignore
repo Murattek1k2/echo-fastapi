@@ -212,3 +212,6 @@ app.db
 
 # Uploaded files
 uploads/
+
+# Docker data directories
+.data/
