@@ -5,6 +5,7 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
+from aiogram.enums import ContentType
 from aiogram.types import BufferedInputFile, CallbackQuery, Message, User
 
 from bot.api_client import ReviewsApiClient
@@ -945,7 +946,15 @@ async def handle_back_to_list(callback: CallbackQuery, callback_data: ReviewList
         reviews = await client.list_reviews(limit=5, offset=offset, **filters)
         
         if not reviews:
-            await callback.message.edit_text(ru.PROMPT_NO_REVIEWS, parse_mode="HTML")
+            # Check if this is a photo message
+            if callback.message.content_type == ContentType.PHOTO:
+                try:
+                    await callback.message.delete()
+                except Exception:
+                    pass  # Ignore deletion errors (message might be too old)
+                await callback.message.answer(ru.PROMPT_NO_REVIEWS, parse_mode="HTML")
+            else:
+                await callback.message.edit_text(ru.PROMPT_NO_REVIEWS, parse_mode="HTML")
             await callback.answer()
             return
         
@@ -955,11 +964,24 @@ async def handle_back_to_list(callback: CallbackQuery, callback_data: ReviewList
             lines.append("")
         
         keyboard = pagination_keyboard(offset, 5, len(reviews), filter_param, reviews=reviews)
-        await callback.message.edit_text(
-            "\n".join(lines),
-            parse_mode="HTML",
-            reply_markup=keyboard,
-        )
+        
+        # Check if this is a photo message - can't use edit_text on photo messages
+        if callback.message.content_type == ContentType.PHOTO:
+            try:
+                await callback.message.delete()
+            except Exception:
+                pass  # Ignore deletion errors (message might be too old)
+            await callback.message.answer(
+                "\n".join(lines),
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
+        else:
+            await callback.message.edit_text(
+                "\n".join(lines),
+                parse_mode="HTML",
+                reply_markup=keyboard,
+            )
         await callback.answer()
     except Exception as e:
         logger.exception("Error returning to list")
