@@ -157,3 +157,99 @@ docker compose up --build
 - Change the default PostgreSQL password in `docker-compose.yml`
 - Set proper `SECRET_KEY` for production
 - Consider using environment variables or secrets management for sensitive data
+
+## GitLab CI/CD Pipeline
+
+The repository includes a GitLab CI/CD pipeline (`.gitlab-ci.yml`) that automates testing, building, and deployment.
+
+### Pipeline Stages
+
+1. **test**: Runs pytest with uv caching
+2. **build**: Builds and pushes Docker images for api and bot to Docker Hub
+3. **deploy**: Deploys to production server via SSH
+
+### GitLab CI Variables (Required)
+
+Configure these variables in **GitLab → Settings → CI/CD → Variables** (masked and protected):
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `DOCKERHUB_USERNAME` | Docker Hub username | `myusername` |
+| `DOCKERHUB_TOKEN` | Docker Hub access token (not password) | `dckr_pat_...` |
+| `SSH_PRIVATE_KEY` | SSH private key for deployment user | `-----BEGIN OPENSSH PRIVATE KEY-----...` |
+| `DEPLOY_HOST` | Server IP or hostname | `192.168.1.100` or `myserver.com` |
+| `DEPLOY_USER` | SSH username on the server | `deploy` |
+| `DEPLOY_PATH` | Path to compose file on server | `/opt/echo-reviews` |
+
+#### Optional Variables
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `DEPLOY_PORT` | SSH port | `22` |
+| `COMPOSE_FILE` | Compose file name | `docker-compose.prod.yml` |
+
+### One-Time Server Setup
+
+Run these commands on your deployment server:
+
+```bash
+# 1. Create deployment directory
+sudo mkdir -p /opt/echo-reviews
+sudo chown $USER:$USER /opt/echo-reviews
+
+# 2. Copy production compose file (do this once, or update via git/scp)
+cd /opt/echo-reviews
+# Copy docker-compose.prod.yml to this directory
+
+# 3. Create environment file with secrets
+cat > .env << 'EOF'
+# Required
+DOCKERHUB_USERNAME=your-dockerhub-username
+BOT_TOKEN=your-telegram-bot-token
+POSTGRES_PASSWORD=your-secure-postgres-password
+
+# Optional
+POSTGRES_DB=reviews
+POSTGRES_USER=postgres
+LOG_LEVEL=INFO
+BOT_IMAGE_MODE=reupload
+EOF
+
+# 4. Create data directories
+mkdir -p .data/postgres uploads
+
+# 5. Ensure Docker is installed
+docker --version
+docker compose version
+
+# 6. (Optional) Pre-pull images to speed up first deployment
+docker compose -f docker-compose.prod.yml pull
+```
+
+### Production Compose File
+
+The `docker-compose.prod.yml` file uses Docker Hub images instead of building locally:
+
+```yaml
+api:
+  image: ${DOCKERHUB_USERNAME}/echo-reviews-api:latest
+  
+bot:
+  image: ${DOCKERHUB_USERNAME}/echo-reviews-bot:latest
+```
+
+### Deploy Script
+
+A deployment script is available at `scripts/deploy.sh` for manual or automated deployments:
+
+```bash
+# On the server
+cd /opt/echo-reviews
+./scripts/deploy.sh
+```
+
+### Docker Hub Image Tags
+
+Each build pushes two tags:
+- `latest` - Always points to the most recent build
+- `<commit-sha>` - Short commit SHA for rollback capability

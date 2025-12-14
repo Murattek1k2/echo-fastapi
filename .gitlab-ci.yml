@@ -1,0 +1,130 @@
+# GitLab CI/CD Pipeline for Echo Reviews (FastAPI API + Aiogram Bot)
+# This pipeline runs on merges/pushes to main and:
+# 1. Runs tests
+# 2. Builds Docker images for api and bot
+# 3. Pushes images to Docker Hub (tags: latest and short SHA)
+# 4. Deploys to server via SSH
+
+stages:
+  - test
+  - build
+  - deploy
+
+variables:
+  # Docker configuration
+  DOCKER_TLS_CERTDIR: "/certs"
+  DOCKER_DRIVER: overlay2
+  # Image names
+  API_IMAGE: ${DOCKERHUB_USERNAME}/echo-reviews-api
+  BOT_IMAGE: ${DOCKERHUB_USERNAME}/echo-reviews-bot
+
+# =============================================================================
+# TEST STAGE
+# =============================================================================
+test:
+  stage: test
+  image: python:3.12-slim
+  variables:
+    # Safe defaults for testing (not production secrets)
+    DATABASE_URL: "sqlite:///./test.db"
+    API_ENV: "test"
+    BOT_TOKEN: "test-token-not-real"
+    API_BASE_URL: "http://localhost:8000"
+    PYTHONPATH: "${CI_PROJECT_DIR}"
+  cache:
+    key: ${CI_COMMIT_REF_SLUG}
+    paths:
+      - .venv/
+  before_script:
+    # Install uv
+    - pip install uv --quiet
+    # Configure uv to create venv in project directory
+    - uv venv .venv
+    - export VIRTUAL_ENV="$(pwd)/.venv"
+    - export PATH="$VIRTUAL_ENV/bin:$PATH"
+    # Install dependencies using uv (compile from pyproject.toml since package-mode=false)
+    - uv pip compile pyproject.toml --no-header -q -o requirements.txt
+    - uv pip install -r requirements.txt --quiet
+    # Install dev dependencies
+    - uv pip install pytest pytest-asyncio httpx --quiet
+  script:
+    - pytest -v
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+    - if: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME == "main"
+
+# =============================================================================
+# BUILD STAGE
+# =============================================================================
+build_api_image:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - docker build -f Dockerfile.api -t ${API_IMAGE}:latest -t ${API_IMAGE}:${CI_COMMIT_SHORT_SHA} .
+    - docker push ${API_IMAGE}:latest
+    - docker push ${API_IMAGE}:${CI_COMMIT_SHORT_SHA}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - test
+
+build_bot_image:
+  stage: build
+  image: docker:24
+  services:
+    - docker:24-dind
+  variables:
+    DOCKER_TLS_CERTDIR: "/certs"
+  before_script:
+    - echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+  script:
+    - docker build -f Dockerfile.bot -t ${BOT_IMAGE}:latest -t ${BOT_IMAGE}:${CI_COMMIT_SHORT_SHA} .
+    - docker push ${BOT_IMAGE}:latest
+    - docker push ${BOT_IMAGE}:${CI_COMMIT_SHORT_SHA}
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - test
+
+# =============================================================================
+# DEPLOY STAGE
+# =============================================================================
+deploy:
+  stage: deploy
+  image: alpine:latest
+  variables:
+    DEPLOY_PORT: ${DEPLOY_PORT:-22}
+    COMPOSE_FILE: ${COMPOSE_FILE:-docker-compose.prod.yml}
+  before_script:
+    # Install SSH client
+    - apk add --no-cache openssh-client
+    # Setup SSH key
+    - mkdir -p ~/.ssh
+    - echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_rsa
+    - chmod 600 ~/.ssh/id_rsa
+    # Add server to known_hosts using ssh-keyscan
+    - ssh-keyscan -p ${DEPLOY_PORT} -H ${DEPLOY_HOST} >> ~/.ssh/known_hosts
+  script:
+    - |
+      ssh -p ${DEPLOY_PORT} ${DEPLOY_USER}@${DEPLOY_HOST} "
+        set -euo pipefail
+        cd ${DEPLOY_PATH}
+        echo '${DOCKERHUB_TOKEN}' | docker login -u '${DOCKERHUB_USERNAME}' --password-stdin
+        docker compose -f ${COMPOSE_FILE} pull
+        docker compose -f ${COMPOSE_FILE} up -d
+        docker image prune -f 2>&1 || echo '[WARN] Image pruning failed (non-critical)'
+      "
+  rules:
+    - if: $CI_COMMIT_BRANCH == "main"
+  needs:
+    - build_api_image
+    - build_bot_image
+  environment:
+    name: production
+    url: http://${DEPLOY_HOST}:8000
