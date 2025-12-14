@@ -19,6 +19,18 @@ class ReviewCreate(BaseModel):
     contains_spoilers: bool = False
 
 
+class ReviewCreateForm(BaseModel):
+    """Schema for creating a review with optional image via form data."""
+
+    author_name: str
+    media_type: MediaType
+    media_title: str
+    media_year: int | None = None
+    rating: int = Field(..., ge=1, le=10)
+    text: str
+    contains_spoilers: bool = False
+
+
 class ReviewUpdate(BaseModel):
     """Schema for updating a review (partial update)."""
 

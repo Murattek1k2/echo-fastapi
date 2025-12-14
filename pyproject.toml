@@ -12,6 +12,9 @@ dependencies = [
     "uvicorn[standard]>=0.38.0",
     "sqlalchemy (>=2.0.45,<3.0.0)",
     "python-multipart>=0.0.20",
+    "aiogram>=3.21.0",
+    "httpx>=0.28.1",
+    "pydantic-settings>=2.7.1",
 ]
 
 
