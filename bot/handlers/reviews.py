@@ -6,6 +6,7 @@ from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.enums import ContentType
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import BufferedInputFile, CallbackQuery, Message, User
 
 from bot.api_client import ReviewsApiClient
@@ -90,6 +91,44 @@ def is_review_author(user_id: int | None, review: dict[str, Any]) -> bool:
         return False
     author_telegram_id = review.get("author_telegram_id")
     return author_telegram_id is not None and author_telegram_id == user_id
+
+
+async def send_or_edit_text_from_callback(
+    callback: CallbackQuery,
+    text: str,
+    parse_mode: str = "HTML",
+    reply_markup: Any = None,
+) -> None:
+    """Send or edit text based on the message content type.
+    
+    For photo messages: deletes the message and sends a new text message.
+    For text messages: edits the message text.
+    
+    Args:
+        callback: The callback query
+        text: Text content to send/edit
+        parse_mode: Parse mode for the message
+        reply_markup: Optional inline keyboard markup
+    """
+    if not callback.message:
+        return
+    
+    if callback.message.content_type == ContentType.PHOTO:
+        try:
+            await callback.message.delete()
+        except TelegramBadRequest:
+            pass  # Ignore deletion errors (message might be too old)
+        await callback.message.answer(
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
+    else:
+        await callback.message.edit_text(
+            text,
+            parse_mode=parse_mode,
+            reply_markup=reply_markup,
+        )
 
 
 async def send_review_with_image(
@@ -946,15 +985,7 @@ async def handle_back_to_list(callback: CallbackQuery, callback_data: ReviewList
         reviews = await client.list_reviews(limit=5, offset=offset, **filters)
         
         if not reviews:
-            # Check if this is a photo message
-            if callback.message.content_type == ContentType.PHOTO:
-                try:
-                    await callback.message.delete()
-                except Exception:
-                    pass  # Ignore deletion errors (message might be too old)
-                await callback.message.answer(ru.PROMPT_NO_REVIEWS, parse_mode="HTML")
-            else:
-                await callback.message.edit_text(ru.PROMPT_NO_REVIEWS, parse_mode="HTML")
+            await send_or_edit_text_from_callback(callback, ru.PROMPT_NO_REVIEWS)
             await callback.answer()
             return
         
@@ -964,24 +995,7 @@ async def handle_back_to_list(callback: CallbackQuery, callback_data: ReviewList
             lines.append("")
         
         keyboard = pagination_keyboard(offset, 5, len(reviews), filter_param, reviews=reviews)
-        
-        # Check if this is a photo message - can't use edit_text on photo messages
-        if callback.message.content_type == ContentType.PHOTO:
-            try:
-                await callback.message.delete()
-            except Exception:
-                pass  # Ignore deletion errors (message might be too old)
-            await callback.message.answer(
-                "\n".join(lines),
-                parse_mode="HTML",
-                reply_markup=keyboard,
-            )
-        else:
-            await callback.message.edit_text(
-                "\n".join(lines),
-                parse_mode="HTML",
-                reply_markup=keyboard,
-            )
+        await send_or_edit_text_from_callback(callback, "\n".join(lines), reply_markup=keyboard)
         await callback.answer()
     except Exception as e:
         logger.exception("Error returning to list")

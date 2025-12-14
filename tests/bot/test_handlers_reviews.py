@@ -4,6 +4,7 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from aiogram.enums import ContentType
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.types import CallbackQuery, Message
 
 from bot.keyboards import ReviewListCallback
@@ -121,8 +122,12 @@ class TestHandleBackToList:
             {"id": 1, "media_title": "Test Movie", "media_type": "movie", "rating": 8, "author_name": "User"},
         ]
 
-        # Make delete raise an exception (simulating message too old)
-        mock_callback_with_photo_message.message.delete = AsyncMock(side_effect=Exception("Message too old"))
+        # Make delete raise TelegramBadRequest (simulating message too old)
+        mock_method = MagicMock()
+        mock_method.url = "https://api.telegram.org"
+        mock_callback_with_photo_message.message.delete = AsyncMock(
+            side_effect=TelegramBadRequest(method=mock_method, message="Message too old")
+        )
 
         with patch("bot.handlers.reviews.get_api_client") as mock_get_client:
             mock_client = MagicMock()
