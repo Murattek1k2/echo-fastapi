@@ -1,18 +1,26 @@
 """Main FastAPI application."""
 
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 
-from app.api.routers import health_router, media_items_router, reviews_router
+from app.api.routers import health_router, reviews_router
 from app.db.session import Base, engine
+
+# Directory for uploaded files
+UPLOADS_DIR = os.getenv("UPLOADS_DIR", "uploads")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Create database tables on startup."""
+    """Create database tables on startup and ensure uploads directory exists."""
     Base.metadata.create_all(bind=engine)
+    # Ensure uploads directory exists
+    Path(UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
     yield
 
 
@@ -23,9 +31,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# Mount static files directory for serving uploaded images
+Path(UPLOADS_DIR).mkdir(parents=True, exist_ok=True)
+app.mount(f"/{UPLOADS_DIR}", StaticFiles(directory=UPLOADS_DIR), name="uploads")
+
 # Include routers
 app.include_router(health_router)
-app.include_router(media_items_router)
 app.include_router(reviews_router)
 
 

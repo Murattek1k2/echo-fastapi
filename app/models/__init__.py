@@ -1,6 +1,5 @@
 """ORM models package."""
 
-from app.models.media_item import MediaItem, MediaType
-from app.models.review import Review
+from app.models.review import MediaType, Review
 
-__all__ = ["MediaItem", "MediaType", "Review"]
+__all__ = ["MediaType", "Review"]
