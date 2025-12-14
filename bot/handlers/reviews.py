@@ -5,7 +5,7 @@ from typing import Any
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
-from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from aiogram.types import BufferedInputFile, CallbackQuery, Message, User
 
 from bot.api_client import ReviewsApiClient
 from bot.config import get_settings
@@ -405,16 +405,23 @@ async def process_review_image(message: Message, state: FSMContext) -> None:
 async def create_review_from_state(
     message_or_callback: Message,
     state: FSMContext,
-    user: Any,
+    user: User,
     upload_image: bool = False,
 ) -> None:
-    """Create review from FSM state data."""
+    """Create review from FSM state data.
+    
+    Args:
+        message_or_callback: Message to respond to
+        state: FSM context
+        user: Telegram User object
+        upload_image: Whether to upload an image from state
+    """
     data = await state.get_data()
     photo_file_id = data.get("photo_file_id") if upload_image else None
     await state.clear()
     
     author_name = get_author_name(user)
-    author_telegram_id = user.id if hasattr(user, 'id') else None
+    author_telegram_id = user.id
     
     try:
         client = get_api_client()
@@ -429,10 +436,9 @@ async def create_review_from_state(
             author_telegram_id=author_telegram_id,
         )
         
-        if photo_file_id and hasattr(message_or_callback, "bot"):
+        if photo_file_id and message_or_callback.bot is not None:
             try:
-                from aiogram import Bot
-                bot: Bot = message_or_callback.bot  # type: ignore
+                bot = message_or_callback.bot
                 file = await bot.get_file(photo_file_id)
                 if file.file_path:
                     file_content = await bot.download_file(file.file_path)
@@ -1114,7 +1120,7 @@ async def handle_photo_action(callback: CallbackQuery, state: FSMContext) -> Non
 @router.message(ReviewPhotoStates.waiting_for_upload, F.photo)
 async def upload_review_photo(message: Message, state: FSMContext) -> None:
     """Upload photo for a review."""
-    if not message.photo or not message.from_user:
+    if not message.photo or not message.from_user or message.bot is None:
         return
     
     data = await state.get_data()
@@ -1128,8 +1134,7 @@ async def upload_review_photo(message: Message, state: FSMContext) -> None:
     photo = message.photo[-1]
     
     try:
-        from aiogram import Bot
-        bot: Bot = message.bot  # type: ignore
+        bot = message.bot
         file = await bot.get_file(photo.file_id)
         if not file.file_path:
             await message.answer(format_error(ru.ERR_FAILED_TO_DOWNLOAD_IMAGE), parse_mode="HTML")
