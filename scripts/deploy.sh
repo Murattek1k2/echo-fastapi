@@ -51,7 +51,9 @@ docker compose -f "${COMPOSE_FILE}" up -d
 
 # Prune unused images (optional, keeps disk usage low)
 log_info "Pruning unused Docker images..."
-docker image prune -f || log_warn "Image pruning failed, continuing..."
+if ! docker image prune -f; then
+    log_warn "Image pruning failed (non-critical), continuing..."
+fi
 
 # Show running containers
 log_info "Deployment complete! Running containers:"
