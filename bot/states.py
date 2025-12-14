@@ -12,6 +12,8 @@ class ReviewCreateStates(StatesGroup):
     rating = State()
     contains_spoilers = State()
     text = State()
+    add_image = State()
+    waiting_for_image = State()
 
 
 class ReviewEditStates(StatesGroup):
@@ -30,3 +32,17 @@ class ReviewDeleteStates(StatesGroup):
     """States for deleting a review."""
 
     confirm = State()
+
+
+class ReviewFindStates(StatesGroup):
+    """States for finding a review."""
+
+    select_method = State()
+    enter_id = State()
+    enter_title = State()
+
+
+class ReviewPhotoStates(StatesGroup):
+    """States for managing review photos."""
+
+    waiting_for_upload = State()

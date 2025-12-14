@@ -33,6 +33,10 @@ class Settings(BaseSettings):
         default="INFO",
         description="Logging level",
     )
+    bot_image_mode: str = Field(
+        default="reupload",
+        description="Image mode: 'url' to send URL directly, 'reupload' to download and re-upload",
+    )
 
 
 def get_settings() -> Settings:

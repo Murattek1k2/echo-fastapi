@@ -262,3 +262,35 @@ class ReviewsApiClient:
             return response.json().get("status") == "healthy"
         except ApiUnavailable:
             return False
+
+    async def download_image(self, image_url: str) -> bytes | None:
+        """Download an image from the API.
+
+        Args:
+            image_url: Image URL path (e.g., /uploads/reviews/1/image.jpg)
+
+        Returns:
+            Image bytes or None if failed
+        """
+        url = f"{self.base_url}{image_url}"
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.get(url)
+                if response.status_code == 200:
+                    return response.content
+                return None
+        except httpx.RequestError:
+            return None
+
+    def get_absolute_image_url(self, image_url: str) -> str:
+        """Build absolute URL for an image.
+
+        Args:
+            image_url: Relative image URL from API (e.g., /uploads/...)
+
+        Returns:
+            Absolute URL
+        """
+        if image_url.startswith("http"):
+            return image_url
+        return f"{self.base_url}{image_url}"
