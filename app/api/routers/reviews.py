@@ -1,5 +1,6 @@
 """Reviews CRUD endpoints."""
 
+import logging
 import os
 import shutil
 import uuid
@@ -12,6 +13,8 @@ from app.db.session import DbSession
 from app.models.review import MediaType, Review
 from app.schemas.review import ReviewCreate, ReviewRead, ReviewUpdate
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/reviews", tags=["Reviews"])
 
 # Max file size for image uploads (5MB)
@@ -19,6 +22,15 @@ MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 # Directory for uploaded files
 UPLOADS_DIR = os.getenv("UPLOADS_DIR", "uploads")
+
+# Allowed image signatures (magic bytes)
+IMAGE_SIGNATURES = {
+    b"\xff\xd8\xff": "image/jpeg",  # JPEG
+    b"\x89PNG\r\n\x1a\n": "image/png",  # PNG
+    b"GIF87a": "image/gif",  # GIF87a
+    b"GIF89a": "image/gif",  # GIF89a
+    b"RIFF": "image/webp",  # WebP (starts with RIFF)
+}
 
 
 @router.post("/", response_model=ReviewRead, status_code=status.HTTP_201_CREATED)
@@ -113,11 +125,31 @@ def delete_review(review_id: int, db: DbSession) -> None:
         try:
             if review_uploads_dir.exists():
                 shutil.rmtree(review_uploads_dir)
-        except OSError:
-            pass  # Best-effort deletion
+        except OSError as e:
+            logger.warning(
+                "Failed to delete image directory for review %d: %s", review_id, e
+            )
 
     db.delete(review)
     db.commit()
+
+
+def _validate_image_signature(content: bytes) -> bool:
+    """Validate file content against known image signatures."""
+    for signature in IMAGE_SIGNATURES:
+        if content.startswith(signature):
+            return True
+    return False
+
+
+def _get_safe_extension(filename: str | None) -> str:
+    """Get a safe file extension from filename."""
+    allowed_extensions = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+    if filename and "." in filename:
+        ext = "." + filename.rsplit(".", 1)[-1].lower()
+        if ext in allowed_extensions:
+            return ext
+    return ".jpg"  # Default to .jpg if no valid extension
 
 
 @router.post("/{review_id}/image", response_model=ReviewRead)
@@ -146,10 +178,15 @@ async def upload_review_image(
             detail=f"File size exceeds maximum allowed size of {MAX_IMAGE_SIZE // (1024 * 1024)}MB",
         )
 
-    # Generate safe filename
-    extension = ""
-    if file.filename and "." in file.filename:
-        extension = "." + file.filename.rsplit(".", 1)[-1].lower()
+    # Validate image signature (magic bytes)
+    if not _validate_image_signature(content):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid image file format",
+        )
+
+    # Generate safe filename with validated extension
+    extension = _get_safe_extension(file.filename)
     safe_filename = f"{uuid.uuid4().hex}{extension}"
 
     # Create directory and save file

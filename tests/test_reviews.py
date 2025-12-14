@@ -144,8 +144,10 @@ def test_upload_image_to_review(client: TestClient, temp_uploads_dir: str) -> No
     assert create_response.status_code == 201
     review_id = create_response.json()["id"]
 
-    # Upload an image
-    test_image = io.BytesIO(b"fake image content for testing")
+    # Upload an image with valid JPEG signature
+    # JPEG starts with FF D8 FF
+    jpeg_header = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01"
+    test_image = io.BytesIO(jpeg_header + b"\x00" * 100)
     upload_response = client.post(
         f"/reviews/{review_id}/image",
         files={"file": ("test_image.jpg", test_image, "image/jpeg")},
@@ -189,8 +191,9 @@ def test_delete_review_with_image_cleanup(client: TestClient, temp_uploads_dir: 
     assert create_response.status_code == 201
     review_id = create_response.json()["id"]
 
-    # Upload an image
-    test_image = io.BytesIO(b"fake image content for testing")
+    # Upload an image with valid JPEG signature
+    jpeg_header = b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01"
+    test_image = io.BytesIO(jpeg_header + b"\x00" * 100)
     upload_response = client.post(
         f"/reviews/{review_id}/image",
         files={"file": ("test_image.jpg", test_image, "image/jpeg")},
@@ -322,6 +325,32 @@ def test_upload_image_non_image_file_rejected(client: TestClient) -> None:
     )
     assert upload_response.status_code == 400
     assert "image" in upload_response.json()["detail"].lower()
+
+
+def test_upload_image_invalid_signature_rejected(client: TestClient) -> None:
+    """Test that files with invalid image signatures are rejected."""
+    # Create a review first
+    create_response = client.post(
+        "/reviews/",
+        json={
+            "author_name": "Alice",
+            "media_type": "movie",
+            "media_title": "Test Movie",
+            "rating": 8,
+            "text": "Great movie!",
+        },
+    )
+    assert create_response.status_code == 201
+    review_id = create_response.json()["id"]
+
+    # Try to upload a file with image content-type but invalid signature
+    fake_image = io.BytesIO(b"not a real image file")
+    upload_response = client.post(
+        f"/reviews/{review_id}/image",
+        files={"file": ("fake.jpg", fake_image, "image/jpeg")},
+    )
+    assert upload_response.status_code == 400
+    assert "invalid" in upload_response.json()["detail"].lower()
 
 
 def test_list_reviews_with_media_title_filter(client: TestClient) -> None:

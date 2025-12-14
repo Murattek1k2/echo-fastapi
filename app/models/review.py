@@ -52,4 +52,7 @@ class Review(Base):
         DateTime, default=utc_now, onupdate=utc_now, nullable=False
     )
 
-    __table_args__ = (Index("ix_reviews_media_title", "media_title"),)
+    __table_args__ = (
+        Index("ix_reviews_media_title", "media_title"),
+        Index("ix_reviews_media_type_title", "media_type", "media_title"),
+    )
