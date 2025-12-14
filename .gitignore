@@ -209,3 +209,6 @@ __marimo__/
 # Test database
 test.db
 app.db
+
+# Uploaded files
+uploads/
