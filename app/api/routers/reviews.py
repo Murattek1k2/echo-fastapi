@@ -6,12 +6,12 @@ import shutil
 import uuid
 from pathlib import Path
 
-from fastapi import APIRouter, HTTPException, UploadFile, status
+from fastapi import APIRouter, Form, HTTPException, UploadFile, status
 from sqlalchemy import select
 
 from app.db.session import DbSession
 from app.models.review import MediaType, Review
-from app.schemas.review import ReviewCreate, ReviewRead, ReviewUpdate
+from app.schemas.review import ReviewCreate, ReviewCreateForm, ReviewRead, ReviewUpdate
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +48,84 @@ def create_review(data: ReviewCreate, db: DbSession) -> Review:
     db.add(review)
     db.commit()
     db.refresh(review)
+    return review
+
+
+@router.post("/with-image", response_model=ReviewRead, status_code=status.HTTP_201_CREATED)
+async def create_review_with_image(
+    db: DbSession,
+    author_name: str = Form(...),
+    media_type: MediaType = Form(...),
+    media_title: str = Form(...),
+    rating: int = Form(..., ge=1, le=10),
+    text: str = Form(...),
+    media_year: int | None = Form(default=None),
+    contains_spoilers: bool = Form(default=False),
+    file: UploadFile | None = None,
+) -> Review:
+    """Create a new review with optional image upload."""
+    # Create the review
+    review = Review(
+        author_name=author_name,
+        media_type=media_type,
+        media_title=media_title,
+        media_year=media_year,
+        rating=rating,
+        text=text,
+        contains_spoilers=contains_spoilers,
+    )
+    db.add(review)
+    db.commit()
+    db.refresh(review)
+    
+    # If image file provided, validate and save it
+    if file is not None and file.filename:
+        # Validate content type
+        if not file.content_type or not file.content_type.startswith("image/"):
+            # Rollback review creation
+            db.delete(review)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="File must be an image",
+            )
+        
+        # Read file content and validate size
+        content = await file.read()
+        if len(content) > MAX_IMAGE_SIZE:
+            db.delete(review)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"File size exceeds maximum allowed size of {MAX_IMAGE_SIZE // (1024 * 1024)}MB",
+            )
+        
+        # Validate image signature (magic bytes)
+        if not _validate_image_signature(content):
+            db.delete(review)
+            db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid image file format",
+            )
+        
+        # Generate safe filename with validated extension
+        extension = _get_safe_extension(file.filename)
+        safe_filename = f"{uuid.uuid4().hex}{extension}"
+        
+        # Create directory and save file
+        review_uploads_dir = Path(UPLOADS_DIR) / "reviews" / str(review.id)
+        review_uploads_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = review_uploads_dir / safe_filename
+        file_path.write_bytes(content)
+        
+        # Update review with image path
+        relative_path = f"{UPLOADS_DIR}/reviews/{review.id}/{safe_filename}"
+        review.image_path = relative_path
+        db.commit()
+        db.refresh(review)
+    
     return review
 
 
