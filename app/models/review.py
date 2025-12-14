@@ -4,6 +4,7 @@ import enum
 from datetime import UTC, datetime
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     DateTime,
     Enum,
@@ -38,7 +39,7 @@ class Review(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     author_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    author_telegram_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    author_telegram_id: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     media_type: Mapped[MediaType] = mapped_column(Enum(MediaType), nullable=False)
     media_title: Mapped[str] = mapped_column(String(255), nullable=False)
     media_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
