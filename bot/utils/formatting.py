@@ -26,7 +26,7 @@ def format_rating(rating: int) -> str:
     stars = "⭐" * min(rating, 5)
     if rating > 5:
         stars += "🌟" * (rating - 5)
-    return ru.FMT_RATING.format(stars, rating)
+    return ru.FMT_RATING.format(stars=stars, rating=rating)
 
 
 def format_spoilers(contains_spoilers: bool) -> str:

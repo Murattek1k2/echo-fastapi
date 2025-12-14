@@ -102,6 +102,21 @@ PROMPT_FIND_METHOD = "🔎 <b>Найти отзыв</b>\n\nКак искать?"
 PROMPT_FIND_ENTER_ID = "🔢 Введите номер отзыва:"
 PROMPT_FIND_ENTER_TITLE = "📝 Введите часть названия для поиска:"
 PROMPT_FIND_INVALID_ID = "Неверный номер отзыва. Введите число."
+PROMPT_FIND_CANCELLED = "❌ Поиск отменён."
+
+# ============== COMMAND USAGE MESSAGES ==============
+CMD_REVIEW_USAGE = "Использование: <code>/review &lt;id&gt;</code>\n\nПример: <code>/review 1</code>"
+CMD_REVIEW_EDIT_USAGE = "Использование: <code>/review_edit &lt;id&gt;</code>\n\nПример: <code>/review_edit 1</code>"
+CMD_REVIEW_DELETE_USAGE = "Использование: <code>/review_delete &lt;id&gt;</code>\n\nПример: <code>/review_delete 1</code>"
+
+# ============== PHOTO MENU TEXT ==============
+PROMPT_PHOTO_MENU = "📷 <b>Управление фото</b>"
+PROMPT_PHOTO_REPLY_HINT = (
+    "💡 Чтобы загрузить изображение, ответьте фотографией на сообщение с отзывом.\n\n"
+    "Например, ответьте фотографией на сообщение от команды <code>/review 1</code>"
+)
+ERR_FAILED_TO_UPLOAD = "Не удалось загрузить изображение: {}"
+ERR_REVIEW_NOT_FOUND_FMT = "Отзыв #{} не найден."
 
 # ============== SUCCESS MESSAGES ==============
 MSG_REVIEW_CREATED = (
@@ -180,7 +195,7 @@ FMT_MEDIA_TYPE_SHORT = {
     "play": "Спектакль",
 }
 
-FMT_RATING = "{} {}/10"  # e.g. "⭐⭐⭐⭐⭐ 5/10"
+FMT_RATING = "{stars} {rating}/10"  # e.g. "⭐⭐⭐⭐⭐ 5/10"
 FMT_SPOILERS_YES = "⚠️ Есть спойлеры"
 FMT_SPOILERS_NO = "✅ Без спойлеров"
 FMT_AUTHOR = "👤 Автор: {}"

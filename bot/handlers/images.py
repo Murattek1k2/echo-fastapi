@@ -79,11 +79,7 @@ async def handle_photo_reply(message: Message) -> None:
     review_id = extract_review_id_from_message(reply_text)
     
     if review_id is None:
-        await message.answer(
-            "💡 Чтобы загрузить изображение, ответьте фотографией на сообщение с отзывом.\n\n"
-            "Например, ответьте фотографией на сообщение от команды <code>/review 1</code>",
-            parse_mode="HTML",
-        )
+        await message.answer(ru.PROMPT_PHOTO_REPLY_HINT, parse_mode="HTML")
         return
     
     # Get the largest photo
@@ -126,9 +122,9 @@ async def handle_photo_reply(message: Message) -> None:
         )
         
     except ApiNotFound:
-        await message.answer(format_error(f"Отзыв #{review_id} не найден."), parse_mode="HTML")
+        await message.answer(format_error(ru.ERR_REVIEW_NOT_FOUND_FMT.format(review_id)), parse_mode="HTML")
     except ApiUnavailable:
         await message.answer(format_error(ru.ERR_API_UNAVAILABLE), parse_mode="HTML")
     except Exception as e:
         logger.exception("Failed to upload image")
-        await message.answer(format_error(f"Не удалось загрузить изображение: {e}"), parse_mode="HTML")
+        await message.answer(format_error(ru.ERR_FAILED_TO_UPLOAD.format(e)), parse_mode="HTML")

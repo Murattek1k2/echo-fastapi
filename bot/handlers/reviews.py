@@ -692,7 +692,7 @@ async def process_find_method(callback: CallbackQuery, state: FSMContext) -> Non
     
     if method == "cancel":
         await state.clear()
-        await callback.message.edit_text(ru.PROMPT_EDIT_CANCELLED)
+        await callback.message.edit_text(ru.PROMPT_FIND_CANCELLED)
         await callback.answer()
         return
     
@@ -790,10 +790,7 @@ async def cmd_review(message: Message, command: CommandObject) -> None:
         return
     
     if not command.args:
-        await message.answer(
-            "Использование: <code>/review &lt;id&gt;</code>\n\nПример: <code>/review 1</code>",
-            parse_mode="HTML",
-        )
+        await message.answer(ru.CMD_REVIEW_USAGE, parse_mode="HTML")
         return
     
     try:
@@ -878,7 +875,7 @@ async def show_photo_submenu(callback: CallbackQuery, state: FSMContext, review_
         await state.update_data(review_id=review_id)
         
         await callback.message.answer(
-            "📷 <b>Управление фото</b>",
+            ru.PROMPT_PHOTO_MENU,
             reply_markup=photo_submenu_keyboard(review_id, has_image),
             parse_mode="HTML",
         )
@@ -978,10 +975,7 @@ async def cmd_review_edit(message: Message, command: CommandObject, state: FSMCo
         return
     
     if not command.args:
-        await message.answer(
-            "Использование: <code>/review_edit &lt;id&gt;</code>\n\nПример: <code>/review_edit 1</code>",
-            parse_mode="HTML",
-        )
+        await message.answer(ru.CMD_REVIEW_EDIT_USAGE, parse_mode="HTML")
         return
     
     try:
@@ -1236,10 +1230,7 @@ async def cmd_review_delete(message: Message, command: CommandObject, state: FSM
         return
     
     if not command.args:
-        await message.answer(
-            "Использование: <code>/review_delete &lt;id&gt;</code>\n\nПример: <code>/review_delete 1</code>",
-            parse_mode="HTML",
-        )
+        await message.answer(ru.CMD_REVIEW_DELETE_USAGE, parse_mode="HTML")
         return
     
     try:
